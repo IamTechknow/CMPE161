@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/CMPE161.iml" filepath="$PROJECT_DIR$/CMPE161.iml" />
+      <module fileurl="file://$PROJECT_DIR$/asg1/asg1.iml" filepath="$PROJECT_DIR$/asg1/asg1.iml" />
+      <module fileurl="file://$PROJECT_DIR$/asg2/asg2.iml" filepath="$PROJECT_DIR$/asg2/asg2.iml" />
+    </modules>
+  </component>
+</project>
