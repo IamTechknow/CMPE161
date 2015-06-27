@@ -2,12 +2,16 @@ package com.IamTechknow.cmpe161.asg1;
 
 import android.app.Activity;
 import android.app.Fragment;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 
 public class CalcActivity extends Activity {
@@ -22,13 +26,18 @@ public class CalcActivity extends Activity {
                     .commit();
         }
 
-//        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-//        setActionBar(toolbar);
-    }
+        FrameLayout layout = (FrameLayout) findViewById(R.id.container);
 
-    //Enum for calculator operations
-    public enum calcOps {
-        NOP, ADD, SUB, MUL, DIV, SIN, COS, TAN
+        //Allow keyboard to be hidden when area outside edittext is touched
+        //from: http://karimvarela.com/2012/07/24/android-how-to-hide-keyboard-by-touching-screen-outside-keyboard/
+        layout.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                InputMethodManager in = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                in.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                return false;
+            }
+        });
     }
 
     /**
@@ -36,11 +45,9 @@ public class CalcActivity extends Activity {
      */
     public static class PlaceholderFragment extends Fragment {
         private EditText mCalcField;
-        private String first, second;
-        private calcOps currOp = calcOps.NOP;
-        private double firstNum, secondNum;
         private Button b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, bMul, bDiv, bSub, bAdd, bClear, bCos, bSin, bTan, bPi, bEquals;
         private ImageButton bDel;
+        private Calculator calc;
 
         public PlaceholderFragment() {
 
@@ -50,6 +57,7 @@ public class CalcActivity extends Activity {
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
+            calc = new Calculator();
         }
 
         @Override
@@ -94,6 +102,32 @@ public class CalcActivity extends Activity {
             bSub.setOnClickListener(createOpListener("-"));
             bMul.setOnClickListener(createOpListener("*"));
             bDiv.setOnClickListener(createOpListener("/"));
+            bSin.setOnClickListener(createTrigListener("sin"));
+            bCos.setOnClickListener(createTrigListener("cos"));
+            bTan.setOnClickListener(createTrigListener("tan"));
+
+            bClear.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) { //Clear input and input string field
+                    mCalcField.setText("");
+                }
+            });
+
+            //Parse input, check for errors, perform operation, then update history
+            bEquals.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    mCalcField.setText(Double.toString(calc.doOp(mCalcField.getText().toString())));
+                }
+            });
+
+            bDel.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    String temp = mCalcField.getText().toString();
+                    mCalcField.setText(temp.substring(0,temp.length()-1));
+                }
+            });
 
             return v;
         }
@@ -112,32 +146,24 @@ public class CalcActivity extends Activity {
                 @Override
                 public void onClick(View v) {
                     mCalcField.setText(mCalcField.getText().toString() + op);
-
-                    switch(op) {
-                        case "+":
-                            currOp = calcOps.ADD;
-                            break;
-                        case "-":
-                            currOp = calcOps.SUB;
-                            break;
-                        case "*":
-                            currOp = calcOps.MUL;
-                            break;
-                        case "/":
-                            currOp = calcOps.DIV;
-                            break;
-                        case "cos":
-                            currOp = calcOps.COS;
-                            break;
-                        case "sin":
-                            currOp = calcOps.SIN;
-                            break;
-                        case "tan":
-                            currOp = calcOps.TAN;
-                            break;
-                    }
+                    calc.setCurrOp(op);
                 }
             };
+        }
+
+        private View.OnClickListener createTrigListener(final String op) {
+            return new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if(isNumeric(mCalcField.getText().toString()))
+                        mCalcField.setText(Double.toString(calc.doTrigOp(op, mCalcField.getText().toString())));
+                }
+            };
+        }
+
+        //Use regex to determine if a string is a decimal number
+        private boolean isNumeric(String str) {
+            return str.matches("-?\\d+(\\.\\d+)?");
         }
     }
 }
