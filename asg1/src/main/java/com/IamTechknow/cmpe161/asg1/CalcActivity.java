@@ -9,10 +9,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
-import android.widget.Button;
-import android.widget.FrameLayout;
-import android.widget.ImageButton;
+import android.widget.*;
 
 public class CalcActivity extends Activity {
 
@@ -28,7 +25,7 @@ public class CalcActivity extends Activity {
 
         FrameLayout layout = (FrameLayout) findViewById(R.id.container);
 
-        //Allow keyboard to be hidden when area outside edittext is touched
+        //Allow keyboard to be hidden when area outside EditText is touched
         //from: http://karimvarela.com/2012/07/24/android-how-to-hide-keyboard-by-touching-screen-outside-keyboard/
         layout.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -44,6 +41,7 @@ public class CalcActivity extends Activity {
      * A placeholder fragment containing a simple view.
      */
     public static class PlaceholderFragment extends Fragment {
+        public static final double TRIG_ERROR = -100.0;
         private EditText mCalcField;
         private Button b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, bMul, bDiv, bSub, bAdd, bClear, bCos, bSin, bTan, bPi, bEquals;
         private ImageButton bDel;
@@ -117,10 +115,18 @@ public class CalcActivity extends Activity {
             bEquals.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    mCalcField.setText(Double.toString(calc.doOp(mCalcField.getText().toString())));
+                    int status = calc.checkOp(mCalcField.getText().toString());
+
+                    if (status == 2)
+                        Toast.makeText(getActivity().getApplicationContext(),R.string.divideError,Toast.LENGTH_SHORT).show();
+                    else if(status == 3)
+                        Toast.makeText(getActivity().getApplicationContext(),R.string.badInput,Toast.LENGTH_SHORT).show();
+                    else
+                        mCalcField.setText(Double.toString(calc.doCalc()));
                 }
             });
 
+            //Deletes the last character in the EditText field
             bDel.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -132,6 +138,7 @@ public class CalcActivity extends Activity {
             return v;
         }
 
+        //Creates a listener that just adds the number to the EditText field
         private View.OnClickListener createListener(final int value) {
             return new View.OnClickListener() {
                 @Override
@@ -141,12 +148,12 @@ public class CalcActivity extends Activity {
             };
         }
 
+        //Adds the operator symbol to the EditText. Operation will be parsed when equals is pressed
         private View.OnClickListener createOpListener(final String op) {
             return new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     mCalcField.setText(mCalcField.getText().toString() + op);
-                    calc.setCurrOp(op);
                 }
             };
         }
@@ -155,8 +162,13 @@ public class CalcActivity extends Activity {
             return new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if(isNumeric(mCalcField.getText().toString()))
-                        mCalcField.setText(Double.toString(calc.doTrigOp(op, mCalcField.getText().toString())));
+                    if(isNumeric(mCalcField.getText().toString())) {
+                        double result = calc.doTrigOp(op, mCalcField.getText().toString());
+                        if(result == TRIG_ERROR)
+                            Toast.makeText(getActivity().getApplicationContext(),R.string.trigError,Toast.LENGTH_SHORT).show();
+                        else
+                            mCalcField.setText(Double.toString(result));
+                    }
                 }
             };
         }

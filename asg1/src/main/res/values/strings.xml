@@ -22,4 +22,7 @@
     <string name="clear">Clear</string>
     <string name="dot">.</string>
     <string name="equals">=</string>
+    <string name="divideError">You may not divide by zero</string>
+    <string name="trigError">Invalid input for tangent</string>
+    <string name="badInput">Bad Input</string>
 </resources>
