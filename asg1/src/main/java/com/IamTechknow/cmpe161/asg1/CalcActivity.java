@@ -19,7 +19,7 @@ public class CalcActivity extends Activity {
         setContentView(R.layout.activity_calc);
         if (savedInstanceState == null) {
             getFragmentManager().beginTransaction()
-                    .add(R.id.container, new PlaceholderFragment())
+                    .add(R.id.container, new CalcFragment())
                     .commit();
         }
 
@@ -40,14 +40,17 @@ public class CalcActivity extends Activity {
     /**
      * A placeholder fragment containing a simple view.
      */
-    public static class PlaceholderFragment extends Fragment {
+    public static class CalcFragment extends Fragment {
         public static final double TRIG_ERROR = -100.0;
+        public static final int DIVIDE_ZERO = 1, BAD_INPUT = 3;
+        private String histTop, histBottom;
         private EditText mCalcField;
-        private Button b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, bMul, bDiv, bSub, bAdd, bClear, bCos, bSin, bTan, bPi, bEquals;
+        private TextView mHistory;
+        private Button b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, bMul, bDiv, bSub, bAdd, bClear, bCos, bSin, bTan, bDot, bEquals;
         private ImageButton bDel;
         private Calculator calc;
 
-        public PlaceholderFragment() {
+        public CalcFragment() {
 
         }
 
@@ -55,6 +58,7 @@ public class CalcActivity extends Activity {
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
+            histTop = histBottom = null;
             calc = new Calculator();
         }
 
@@ -63,6 +67,7 @@ public class CalcActivity extends Activity {
             View v = inflater.inflate(R.layout.fragment_calc, container, false);
 
             mCalcField = (EditText) v.findViewById(R.id.editText);
+            mHistory = (TextView) v.findViewById(R.id.textView);
             b0 = (Button) v.findViewById(R.id.zero);
             b1 = (Button) v.findViewById(R.id.one);
             b2 = (Button) v.findViewById(R.id.two);
@@ -82,20 +87,21 @@ public class CalcActivity extends Activity {
             bCos = (Button) v.findViewById(R.id.cos);
             bSin = (Button) v.findViewById(R.id.sin);
             bTan = (Button) v.findViewById(R.id.tan);
-            bPi = (Button) v.findViewById(R.id.pi);
+            bDot = (Button) v.findViewById(R.id.pi);
             bEquals = (Button) v.findViewById(R.id.equals);
 
             //Set listeners for numeric buttons
-            b0.setOnClickListener(createListener(0));
-            b1.setOnClickListener(createListener(1));
-            b2.setOnClickListener(createListener(2));
-            b3.setOnClickListener(createListener(3));
-            b4.setOnClickListener(createListener(4));
-            b5.setOnClickListener(createListener(5));
-            b6.setOnClickListener(createListener(6));
-            b7.setOnClickListener(createListener(7));
-            b8.setOnClickListener(createListener(8));
-            b9.setOnClickListener(createListener(9));
+            b0.setOnClickListener(createListener('0'));
+            b1.setOnClickListener(createListener('1'));
+            b2.setOnClickListener(createListener('2'));
+            b3.setOnClickListener(createListener('3'));
+            b4.setOnClickListener(createListener('4'));
+            b5.setOnClickListener(createListener('5'));
+            b6.setOnClickListener(createListener('6'));
+            b7.setOnClickListener(createListener('7'));
+            b8.setOnClickListener(createListener('8'));
+            b9.setOnClickListener(createListener('9'));
+            bDot.setOnClickListener(createListener('.'));
             bAdd.setOnClickListener(createOpListener("+"));
             bSub.setOnClickListener(createOpListener("-"));
             bMul.setOnClickListener(createOpListener("*"));
@@ -117,12 +123,14 @@ public class CalcActivity extends Activity {
                 public void onClick(View v) {
                     int status = calc.checkOp(mCalcField.getText().toString());
 
-                    if (status == 2)
+                    if (status == DIVIDE_ZERO)
                         Toast.makeText(getActivity().getApplicationContext(),R.string.divideError,Toast.LENGTH_SHORT).show();
-                    else if(status == 3)
+                    else if(status == BAD_INPUT)
                         Toast.makeText(getActivity().getApplicationContext(),R.string.badInput,Toast.LENGTH_SHORT).show();
                     else
-                        mCalcField.setText(Double.toString(calc.doCalc()));
+                        //mCalcField.setText(Double.toString(calc.doCalc()));
+                        updateHistory(String.format("%s=%s", mCalcField.getText().toString(), Double.toString(calc.doCalc() )));
+                    mCalcField.setText("");
                 }
             });
 
@@ -139,11 +147,11 @@ public class CalcActivity extends Activity {
         }
 
         //Creates a listener that just adds the number to the EditText field
-        private View.OnClickListener createListener(final int value) {
+        private View.OnClickListener createListener(final char value) {
             return new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    mCalcField.setText(mCalcField.getText().toString() + Integer.toString(value));
+                    mCalcField.setText(mCalcField.getText().toString() + Character.toString(value));
                 }
             };
         }
@@ -167,7 +175,7 @@ public class CalcActivity extends Activity {
                         if(result == TRIG_ERROR)
                             Toast.makeText(getActivity().getApplicationContext(),R.string.trigError,Toast.LENGTH_SHORT).show();
                         else
-                            mCalcField.setText(Double.toString(result));
+                            updateHistory(Double.toString(result));
                     }
                 }
             };
@@ -176,6 +184,19 @@ public class CalcActivity extends Activity {
         //Use regex to determine if a string is a decimal number
         private boolean isNumeric(String str) {
             return str.matches("-?\\d+(\\.\\d+)?");
+        }
+
+        //For any button that wants to print to the history, use this function. There are two strings to keep track
+        //of. The result string will always go to the first string, but first if the first string already exists, move it to the second.
+        private void updateHistory(String result) {
+            if(histTop.length() > 0)
+                histBottom = histTop;
+            histTop = result;
+
+            if(histBottom.length() > 0)
+                mHistory.setText(histTop + "\n" + histBottom);
+            else
+                mHistory.setText(histTop);
         }
     }
 }

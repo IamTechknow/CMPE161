@@ -13,7 +13,7 @@ public class Calculator {
         NOP, ADD, SUB, MUL, DIV, SIN, COS, TAN
     }
 
-    public static final String inputRegex = "([-])?(\\d{1,10})([-+*/])([-])?(\\d{1,10})";
+    public static final String inputRegex = "([-])?(\\d{1,10}(\\.\\d{1,10})?)([-+*/])([-])?(\\d{1,10}(\\.\\d{1,10})?)";
     public static final double TRIG_ERROR = -100.0;
     public static final int DIVIDE_ZERO = 1, BAD_INPUT = 3;
     private double firstNum, secondNum, result;
@@ -72,7 +72,7 @@ public class Calculator {
     }
 
     public int errorCheck(double arg) {
-        if(currOp == calcOps.DIV && arg == 0)
+        if(currOp == calcOps.DIV && arg == 0.0)
             return DIVIDE_ZERO;
         else if(currOp == calcOps.TAN && (arg-90.0) % 180.0 == 0.0)
             return 2;
@@ -89,10 +89,17 @@ public class Calculator {
         if(m.matches()) { //do the matching
             //Check each group and set fields and op
             first = m.group(2);
-            setCurrOp(m.group(3));
-            second = m.group(5);
+            setCurrOp(m.group(4));
+            second = m.group(6);
             firstNum = Double.parseDouble(first);
             secondNum = Double.parseDouble(second);
+
+            //Check for negative signs
+            if(m.group(1) != null)
+                firstNum = -firstNum;
+
+            if(m.group(5) != null)
+                secondNum = -secondNum;
 
             return errorCheck(secondNum);
         } else
