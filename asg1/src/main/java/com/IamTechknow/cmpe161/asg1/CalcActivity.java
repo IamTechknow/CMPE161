@@ -128,9 +128,8 @@ public class CalcActivity extends Activity {
                     else if(status == BAD_INPUT)
                         Toast.makeText(getActivity().getApplicationContext(),R.string.badInput,Toast.LENGTH_SHORT).show();
                     else
-                        //mCalcField.setText(Double.toString(calc.doCalc()));
                         updateHistory(String.format("%s=%s", mCalcField.getText().toString(), Double.toString(calc.doCalc() )));
-                    mCalcField.setText("");
+                    mCalcField.setText(Double.toString(calc.doCalc() )); //if bad input, this happens to restore previous result
                 }
             });
 
@@ -175,7 +174,7 @@ public class CalcActivity extends Activity {
                         if(result == TRIG_ERROR)
                             Toast.makeText(getActivity().getApplicationContext(),R.string.trigError,Toast.LENGTH_SHORT).show();
                         else
-                            updateHistory(Double.toString(result));
+                            updateHistory(String.format("%s(%s)=%s", op, mCalcField.getText().toString(),Double.toString(result) ));
                     }
                 }
             };
@@ -189,11 +188,11 @@ public class CalcActivity extends Activity {
         //For any button that wants to print to the history, use this function. There are two strings to keep track
         //of. The result string will always go to the first string, but first if the first string already exists, move it to the second.
         private void updateHistory(String result) {
-            if(histTop.length() > 0)
+            if(histTop != null)
                 histBottom = histTop;
             histTop = result;
 
-            if(histBottom.length() > 0)
+            if(histBottom != null)
                 mHistory.setText(histTop + "\n" + histBottom);
             else
                 mHistory.setText(histTop);
