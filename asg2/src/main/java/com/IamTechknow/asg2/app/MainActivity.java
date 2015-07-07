@@ -25,6 +25,9 @@ import android.view.SurfaceView;
 import android.view.SurfaceHolder;
 import android.util.Size;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Android Implementation of CMPE 161 Assignment 2. Uses the new Camera2 API found in API level 21 and above.
  * Uses code from the following examples:
@@ -55,7 +58,27 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * A placeholder fragment containing a simple view.
+     * The program flow of control is: <br />
+     * 1) Add the surfaceview to the top-level view and attach the callback <br />
+     * 2) In the callback, when the surface is created, do the following: <br />
+     *      Setup the CameraManager
+     *      Obtain the CameraCharacteristics for the back facing camera
+     *      Get supported sizes for the camera, and find the biggest size
+     *      Set the size for the surfaceHolder
+     *      open the CameraDevice, and set the CaptureSessionListener callback to start the capture session
+     *
+     *    If the surfaceView changed (due to rotation or on app resume), set the biggest size again
+     *
+     *    If the surfaceView is destroyed, end the capture session <br />
+     *
+     * 3) In the CameraDevice callback:
+     *      Put the surfaceholder's surface into a list
+     *      Setup a camera preview request and make it repeat
+     *
+     * 4) In the CaptureSession state callback:
+     *      Create a request for a camera preview
+     *      Add a output surface for the request
+     *      Build the request, and set it to be repeating
      */
     public static class PlaceholderFragment extends Fragment {
         //Camera fields
@@ -79,7 +102,16 @@ public class MainActivity extends Activity {
         private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
             @Override
             public void onOpened(CameraDevice camera) {
+                //When the camera is opened start the preview
                 Log.i(TAG, "Successfully opened camera");
+                mCamera = camera;
+                try {
+                    List<Surface> outputs = Arrays.asList( //capture session needs a list of surfaces
+                            mSurfaceView.getHolder().getSurface());
+                    mCamera.createCaptureSession(outputs, mPreviewStateCallback, mPreviewHandler);
+                } catch (CameraAccessException e) {
+                    Log.e(TAG, "Failed to create a capture session", e);
+                }
 
             }
 
@@ -108,8 +140,7 @@ public class MainActivity extends Activity {
                     mPreviewSize = getBestSize(map.getOutputSizes(ImageFormat.JPEG));
                     mSurfaceHolder.setFixedSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
 
-                    mCameraManager.openCamera(mCameraId, mStateCallback, null); //open camera. null = use main thread looper
-                    //FIXME: Connect the surface to the camera
+                    mCameraManager.openCamera(mCameraId, mStateCallback, mPreviewHandler); //open camera. null = use main thread looper
                 } catch (CameraAccessException e) {
                     Log.e(TAG, "Unable to list cameras", e);
                     e.printStackTrace();
@@ -144,7 +175,24 @@ public class MainActivity extends Activity {
         private CameraCaptureSession.StateCallback mPreviewStateCallback = new CameraCaptureSession.StateCallback() {
             @Override
             public void onConfigured(CameraCaptureSession session) {
+                //Request for preview footage and set a repeating request
                 mCaptureSession = session;
+                if(mSurfaceHolder != null) {
+                    try { //Create a capture request and adds the surfaceview's surface as the target
+                        CaptureRequest.Builder requestBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+                        requestBuilder.addTarget(mSurfaceHolder.getSurface());
+                        CaptureRequest previewRequest = requestBuilder.build();
+
+                        try {
+                            mCaptureSession.setRepeatingRequest(previewRequest, null, null); //no metadata, use main thread
+                        } catch (CameraAccessException e) {
+                            Log.e(TAG, "Failed to make repeating preview request", e);
+                        }
+                    } catch (CameraAccessException e) {
+                        Log.e(TAG, "Failed to build preview request", e);
+                    }
+                } else
+                    Log.e(TAG, "Holder didn't exist when trying to formulate preview request");
             }
 
             @Override
@@ -154,7 +202,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onConfigureFailed(CameraCaptureSession session) {
-
+                Log.e(TAG, "Configuration error on device '" + mCamera.getId());
             }
         };
 
@@ -167,16 +215,18 @@ public class MainActivity extends Activity {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
 
+            setupHandler();
         }
 
         @Override
         public void onResume() {
             super.onResume();
+            setupHandler();
             mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
 
             //Resume camera session
             try {
-                mCameraManager.openCamera(mCameraId, mStateCallback, null);
+                mCameraManager.openCamera(mCameraId, mStateCallback, mPreviewHandler);
             } catch (CameraAccessException e) {
                 e.printStackTrace();
             }
@@ -222,6 +272,13 @@ public class MainActivity extends Activity {
                 }
             }
             return bestSize;
+        }
+
+        private void setupHandler() {
+            // Start a background thread to manage camera requests
+            mPreviewThread = new HandlerThread("background");
+            mPreviewThread.start();
+            mPreviewHandler = new Handler(mPreviewThread.getLooper());
         }
     }
 }
