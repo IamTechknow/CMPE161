@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Video Shape Overlay</string>
+    <string name="shaken">Device shaken</string>
 </resources>

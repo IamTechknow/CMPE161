@@ -6,5 +6,11 @@
         <TextureView
                 android:id="@+id/camera_view"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                />
+    <Switch
+            android:id="@+id/shape_switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"/>
 </FrameLayout>

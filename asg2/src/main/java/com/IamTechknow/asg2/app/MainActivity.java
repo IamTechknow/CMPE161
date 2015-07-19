@@ -12,6 +12,10 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -23,9 +27,15 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.MotionEvent;
 import android.util.Size;
+import android.util.Pair;
+import android.widget.CompoundButton;
+import android.widget.Switch;
+import android.widget.Toast;
 
 import java.util.Collections;
+import java.util.ArrayList;
 
 /**
  * Android Implementation of CMPE 161 Assignment 2. Uses the new Camera2 API found in API level 21 and above.
@@ -89,14 +99,50 @@ public class MainActivity extends Activity {
         private Size mPreviewSize;
         private CaptureRequest.Builder mPreviewBuilder;
 
+        //Sensor and graphics fields
+        public final float SHAKE_THRESHOLD = 2.7f;
+        private long mLastUpdate;
+        private SensorManager mSensorManager;
+        private ArrayList<Pair<Float, Float>> circleCoord = new ArrayList<>(),
+                lineStartCoord = new ArrayList<>(),
+                lineEndCoord = new ArrayList<>();
+        private boolean mCircles = true, lineStarted = false;
+
         //Surface fields
         private TextureView mTextureView;
+        private Switch mSwitch;
 
         //Thread fields
         private Handler mPreviewHandler;
         private HandlerThread mPreviewThread;
 
         //Callback fields
+        private SensorEventListener mShakeResponse = new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent event) { //Check for shake
+                if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                    float x = event.values[0], y = event.values[1], z = event.values[2];
+                    float accelSqrt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
+                    long actualTime = event.timestamp; //timestamp = ns since uptime
+
+                    if(accelSqrt >= SHAKE_THRESHOLD) {
+                        if(actualTime - mLastUpdate < 3000000) //ignore events too close by 300 ms
+                            return;
+
+                        //valid shake
+                        mLastUpdate = actualTime;
+                        Toast.makeText(getActivity(), R.string.shaken, Toast.LENGTH_SHORT).show();
+                        circleCoord.clear(); lineStartCoord.clear(); lineEndCoord.clear();
+                    }
+                }
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+            }
+        };
+
         private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
             @Override
             public void onOpened(CameraDevice camera) {
@@ -208,22 +254,28 @@ public class MainActivity extends Activity {
             }
         };
 
+
         public PlaceholderFragment() {
         }
 
-        //Setup the fragment. Ensure it survives rotation and setup camera
+        //Setup the fragment. Ensure it survives rotation and setup camera and sensor manager
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
+            mLastUpdate = System.nanoTime(); //time since start up
 
             setupHandler();
+            mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
+            mSensorManager.registerListener(mShakeResponse, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
         }
 
         @Override
         public void onResume() {
+            //Re-register background handler and listeners
             super.onResume();
             setupHandler();
+            mSensorManager.registerListener(mShakeResponse, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
             mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
 
             if(mCameraId != null)
@@ -250,6 +302,16 @@ public class MainActivity extends Activity {
                 mCamera.close();
                 mCamera = null;
             }
+
+            mPreviewThread.quitSafely();
+            try {
+                mPreviewThread.join();
+            } catch (InterruptedException ex) {
+                Log.e(TAG, "Background worker thread was interrupted while joined", ex);
+            }
+
+            //Free accelerometer
+            mSensorManager.unregisterListener(mShakeResponse);
             super.onPause();
         }
 
@@ -261,6 +323,37 @@ public class MainActivity extends Activity {
             //Obtain the texture view to implement callbacks for displaying raw pixel data
             mTextureView = (TextureView) v.findViewById(R.id.camera_view);
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+
+            //Set how to respond to touch events to create shapes
+            mTextureView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    //Add coordinates of where touch occur to a Pair then the list
+                    if(mCircles)
+                        circleCoord.add(new Pair<>(event.getX(), event.getY()));
+                    else {
+                        if(lineStarted) {
+                            lineStarted = false;
+                            lineEndCoord.add(new Pair<>(event.getX(), event.getY()));
+                        } else {
+                            lineStarted = true;
+                            lineStartCoord.add(new Pair<>(event.getX(), event.getY()));
+                        }
+                    }
+                    Log.d(TAG, "Touch registered at " + Float.toString(event.getX()) + "," + Float.toString(event.getY()));
+                    return true;
+                }
+            });
+
+            //Configure the switch to set whether to draw lines or circles
+            mSwitch = (Switch) v.findViewById(R.id.shape_switch);
+            mSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    mCircles = !isChecked;
+                    Toast.makeText(getActivity(), "mCircles = " + mCircles, Toast.LENGTH_SHORT).show();
+                }
+            });
 
             return v;
         }
