@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public final float SHAKE_THRESHOLD = 2.7f;
+        public final float SHAKE_THRESHOLD = 5.4f;
         private long mLastUpdate;
         private SensorManager mSensorManager;
         private ArrayList<Pair<Float, Float>> circleCoord = new ArrayList<>(),
@@ -126,10 +126,10 @@ public class MainActivity extends Activity {
                     long actualTime = event.timestamp; //timestamp = ns since uptime
 
                     if(accelSqrt >= SHAKE_THRESHOLD) {
-                        if(actualTime - mLastUpdate < 3000000) //ignore events too close by 300 ms
+                        if(actualTime - mLastUpdate < 300000000) //ignore events too close by 300ms
                             return;
 
-                        //valid shake
+                        //valid shake, get rid of all shapes
                         mLastUpdate = actualTime;
                         Toast.makeText(getActivity(), R.string.shaken, Toast.LENGTH_SHORT).show();
                         circleCoord.clear(); lineStartCoord.clear(); lineEndCoord.clear();
@@ -328,19 +328,21 @@ public class MainActivity extends Activity {
             mTextureView.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
-                    //Add coordinates of where touch occur to a Pair then the list
-                    if(mCircles)
-                        circleCoord.add(new Pair<>(event.getX(), event.getY()));
-                    else {
-                        if(lineStarted) {
-                            lineStarted = false;
-                            lineEndCoord.add(new Pair<>(event.getX(), event.getY()));
-                        } else {
-                            lineStarted = true;
-                            lineStartCoord.add(new Pair<>(event.getX(), event.getY()));
+                    if(event.getActionMasked() == MotionEvent.ACTION_DOWN) { //only want to register events once
+                        //Add coordinates of where touch occur to a Pair then the list
+                        if (mCircles)
+                            circleCoord.add(new Pair<>(event.getX(), event.getY()));
+                        else {
+                            if (lineStarted) {
+                                lineStarted = false;
+                                lineEndCoord.add(new Pair<>(event.getX(), event.getY()));
+                            } else {
+                                lineStarted = true;
+                                lineStartCoord.add(new Pair<>(event.getX(), event.getY()));
+                            }
                         }
+                        Log.d(TAG, "Touch registered at " + Float.toString(event.getX()) + "," + Float.toString(event.getY()));
                     }
-                    Log.d(TAG, "Touch registered at " + Float.toString(event.getX()) + "," + Float.toString(event.getY()));
                     return true;
                 }
             });
@@ -351,13 +353,14 @@ public class MainActivity extends Activity {
                 @Override
                 public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                     mCircles = !isChecked;
-                    Toast.makeText(getActivity(), "mCircles = " + mCircles, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getActivity(), mCircles ? R.string.circles : R.string.lines, Toast.LENGTH_SHORT).show();
                 }
             });
 
             return v;
         }
 
+        //Choose the largest size for the preview
         private Size getBestSize(Size[] sizes) {
             Size bestSize = sizes[0];
             int largestArea = bestSize.getWidth() * bestSize.getHeight();
