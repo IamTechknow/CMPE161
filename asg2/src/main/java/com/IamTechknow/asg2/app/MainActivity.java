@@ -4,6 +4,12 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
@@ -26,6 +32,8 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.Surface;
+import android.view.SurfaceView;
+import android.view.SurfaceHolder;
 import android.view.TextureView;
 import android.view.MotionEvent;
 import android.util.Size;
@@ -62,7 +70,6 @@ public class MainActivity extends Activity {
                     .add(R.id.container, new PlaceholderFragment())
                     .commit();
         }
-
     }
 
     /**
@@ -100,16 +107,20 @@ public class MainActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public final float SHAKE_THRESHOLD = 5.4f;
+        public final float SHAKE_THRESHOLD = 5.4f, RADIUS = 50.0f, WIDTH = 8.0f;
+        public final int SKAKE_DURATION = 300000000;
         private long mLastUpdate;
         private SensorManager mSensorManager;
-        private ArrayList<Pair<Float, Float>> circleCoord = new ArrayList<>(),
-                lineStartCoord = new ArrayList<>(),
-                lineEndCoord = new ArrayList<>();
-        private boolean mCircles = true, lineStarted = false;
+        private ArrayList<Pair<Float, Float>> mCircleCoords;
+        private float[] mLineCoords;
+        private int mLineIndex = 0;
+        private boolean mCircles = true, mLineStarted = false, mDeleteShapes = false;
+        private Paint mPaint;
 
         //Surface fields
         private TextureView mTextureView;
+        private SurfaceView mSurfaceView;
+        private SurfaceHolder mSurfaceHolder;
         private Switch mSwitch;
 
         //Thread fields
@@ -126,13 +137,14 @@ public class MainActivity extends Activity {
                     long actualTime = event.timestamp; //timestamp = ns since uptime
 
                     if(accelSqrt >= SHAKE_THRESHOLD) {
-                        if(actualTime - mLastUpdate < 300000000) //ignore events too close by 300ms
+                        if(actualTime - mLastUpdate < SKAKE_DURATION) //ignore events too close by 300ms
                             return;
 
                         //valid shake, get rid of all shapes
                         mLastUpdate = actualTime;
+                        mDeleteShapes = true; mLineStarted = false;
                         Toast.makeText(getActivity(), R.string.shaken, Toast.LENGTH_SHORT).show();
-                        circleCoord.clear(); lineStartCoord.clear(); lineEndCoord.clear();
+                        mCircleCoords.clear(); mLineIndex = 0;
                     }
                 }
             }
@@ -189,19 +201,33 @@ public class MainActivity extends Activity {
 
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-                //Log.i(TAG, "onSurfaceTextureUpdated()");
+                //Try to draw the shapes here by obtaining a surface from the surface view and its canvas
+                Surface s = mSurfaceHolder.getSurface();
+                Canvas c = s.lockCanvas(new Rect(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight()));
+
+                if(mDeleteShapes) { //Delete everything by applying transparent rectangle
+                    c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+                    mDeleteShapes = false;
+                }
+                else {
+                    for (Pair currPair : mCircleCoords)
+                        c.drawCircle((float) currPair.first, (float) currPair.second, RADIUS, mPaint);
+                    if(!mLineStarted)
+                        c.drawLines(mLineCoords, 0, mLineIndex, mPaint); //stop drawing after mLineIndex values used
+                }
+
+                s.unlockCanvasAndPost(c);
             }
 
             @Override
             public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
                 Log.i(TAG, "onSurfaceTextureSizeChanged()");
-
             }
 
             @Override
             public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
                 Log.i(TAG, "onSurfaceTextureDestroyed()");
-                return false;
+                return true;
             }
 
             @Override
@@ -231,7 +257,6 @@ public class MainActivity extends Activity {
             public void onConfigured(CameraCaptureSession session) {
                 //Request for preview footage and set a repeating request
                 mCaptureSession = session;
-
                 mPreviewBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
 
                 setupHandler();
@@ -254,16 +279,41 @@ public class MainActivity extends Activity {
             }
         };
 
+        private SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+
+            }
+
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+
+            }
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) {
+                holder.getSurface().release();
+            }
+        };
 
         public PlaceholderFragment() {
         }
 
-        //Setup the fragment. Ensure it survives rotation and setup camera and sensor manager
+        //Setup the fragment. Ensure it survives rotation and setup camera, paint, and sensor manager
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
             mLastUpdate = System.nanoTime(); //time since start up
+            mPaint = new Paint();
+            mCircleCoords = new ArrayList<>();
+            mLineCoords = new float[100];
+
+            mPaint.setAntiAlias(true);
+            mPaint.setStrokeWidth(WIDTH);
+            mPaint.setColor(Color.BLUE);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeJoin(Paint.Join.ROUND);
 
             setupHandler();
             mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
@@ -278,8 +328,7 @@ public class MainActivity extends Activity {
             mSensorManager.registerListener(mShakeResponse, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
             mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
 
-            if(mCameraId != null)
-                //Resume camera session
+            if(mCameraId != null) //Resume camera session
                 try {
                     if(mTextureView.isAvailable())
                         mCameraManager.openCamera(mCameraId, mStateCallback, mPreviewHandler);
@@ -324,21 +373,29 @@ public class MainActivity extends Activity {
             mTextureView = (TextureView) v.findViewById(R.id.camera_view);
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
-            //Set how to respond to touch events to create shapes
-            mTextureView.setOnTouchListener(new View.OnTouchListener() {
+            //Set the SurfaceView to respond to touch events to create shapes
+            //Here we set the view to be transparent to see camera preview
+            mSurfaceView = (SurfaceView) v.findViewById(R.id.shape_view);
+            mSurfaceView.setZOrderOnTop(true);
+            mSurfaceHolder = mSurfaceView.getHolder();
+            mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
+            mSurfaceHolder.addCallback(mSurfaceCallback);
+            mSurfaceView.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
                     if(event.getActionMasked() == MotionEvent.ACTION_DOWN) { //only want to register events once
                         //Add coordinates of where touch occur to a Pair then the list
                         if (mCircles)
-                            circleCoord.add(new Pair<>(event.getX(), event.getY()));
+                            mCircleCoords.add(new Pair<>(event.getX(), event.getY()));
                         else {
-                            if (lineStarted) {
-                                lineStarted = false;
-                                lineEndCoord.add(new Pair<>(event.getX(), event.getY()));
+                            if (mLineStarted) {
+                                mLineStarted = false;
+                                mLineCoords[mLineIndex++] = event.getX();
+                                mLineCoords[mLineIndex++] = event.getY();
                             } else {
-                                lineStarted = true;
-                                lineStartCoord.add(new Pair<>(event.getX(), event.getY()));
+                                mLineStarted = true;
+                                mLineCoords[mLineIndex++] = event.getX();
+                                mLineCoords[mLineIndex++] = event.getY();
                             }
                         }
                         Log.d(TAG, "Touch registered at " + Float.toString(event.getX()) + "," + Float.toString(event.getY()));
