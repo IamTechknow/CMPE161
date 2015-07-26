@@ -113,8 +113,8 @@ public class MainActivity extends Activity {
         private SensorManager mSensorManager;
         private ArrayList<Pair<Float, Float>> mCircleCoords;
         private float[] mLineCoords;
-        private int mLineIndex = 0;
-        private boolean mCircles = true, mLineStarted = false, mDeleteShapes = false;
+        private int mLineIndex = 0, mLines = 0;
+        private boolean mCircles = true, mLineStarted = false;
         private Paint mPaint;
 
         //Surface fields
@@ -142,9 +142,9 @@ public class MainActivity extends Activity {
 
                         //valid shake, get rid of all shapes
                         mLastUpdate = actualTime;
-                        mDeleteShapes = true; mLineStarted = false;
+                        mLineStarted = false;
                         Toast.makeText(getActivity(), R.string.shaken, Toast.LENGTH_SHORT).show();
-                        mCircleCoords.clear(); mLineIndex = 0;
+                        mCircleCoords.clear(); mLineIndex = mLines = 0;
                     }
                 }
             }
@@ -203,18 +203,12 @@ public class MainActivity extends Activity {
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
                 //Try to draw the shapes here by obtaining a surface from the surface view and its canvas
                 Surface s = mSurfaceHolder.getSurface();
-                Canvas c = s.lockCanvas(new Rect(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight()));
+                Canvas c = s.lockCanvas(null); //redraw the whole screen. define rect won't work
 
-                if(mDeleteShapes) { //Delete everything by applying transparent rectangle
-                    c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-                    mDeleteShapes = false;
-                }
-                else {
-                    for (Pair currPair : mCircleCoords)
-                        c.drawCircle((float) currPair.first, (float) currPair.second, RADIUS, mPaint);
-                    if(!mLineStarted)
-                        c.drawLines(mLineCoords, 0, mLineIndex, mPaint); //stop drawing after mLineIndex values used
-                }
+                c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR); //always reset canvas
+                for (Pair currPair : mCircleCoords)
+                    c.drawCircle((float) currPair.first, (float) currPair.second, RADIUS, mPaint);
+                c.drawLines(mLineCoords, 0, mLines * 4, mPaint); //stop drawing after mLineIndex values used
 
                 s.unlockCanvasAndPost(c);
             }
@@ -388,15 +382,14 @@ public class MainActivity extends Activity {
                         if (mCircles)
                             mCircleCoords.add(new Pair<>(event.getX(), event.getY()));
                         else {
-                            if (mLineStarted) {
+                            if (mLineStarted) { //line counts up when endpoint for a line is made
+                                mLines++;
                                 mLineStarted = false;
-                                mLineCoords[mLineIndex++] = event.getX();
-                                mLineCoords[mLineIndex++] = event.getY();
-                            } else {
+                            } else
                                 mLineStarted = true;
-                                mLineCoords[mLineIndex++] = event.getX();
-                                mLineCoords[mLineIndex++] = event.getY();
-                            }
+
+                            mLineCoords[mLineIndex++] = event.getX();
+                            mLineCoords[mLineIndex++] = event.getY();
                         }
                         Log.d(TAG, "Touch registered at " + Float.toString(event.getX()) + "," + Float.toString(event.getY()));
                     }
