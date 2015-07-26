@@ -91,7 +91,7 @@ public class MainActivity extends Activity {
      */
     public static class RollonFragment extends Fragment {
         //Camera fields
-        public static final String TAG = "VideoOverlay";
+        public static final String TAG = "RollOn";
         private CameraDevice mCamera;
         private CameraManager mCameraManager;
         private CameraCharacteristics mCameraCharacteristics;
@@ -101,7 +101,10 @@ public class MainActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public final float RADIUS = 20.0f, WIDTH = 8.0f;
+        public final float RADIUS = 20.0f;
+        private float x, y, a_y, a_x, v_x, v_x1, v_y, v_y1, mGamma, w, h; //status of ball
+        private int mInterval;
+        private boolean moveX, moveY;
         private SensorManager mSensorManager;
         private Paint mPaint;
 
@@ -109,7 +112,7 @@ public class MainActivity extends Activity {
         private TextureView mTextureView;
         private SurfaceView mSurfaceView;
         private SurfaceHolder mSurfaceHolder;
-        private Switch mRawSwitch, mFusedSwitch;
+        private Switch mRawSwitch, mGravity;
         private Button mReset;
         private SeekBar mSeekBar;
 
@@ -118,15 +121,17 @@ public class MainActivity extends Activity {
         private HandlerThread mPreviewThread;
 
         //Callback fields
+
+        //Use the push method to regularly obtain accelerometer values to move the ball
         private SensorEventListener mShakeResponse = new SensorEventListener() {
             @Override
-            public void onSensorChanged(SensorEvent event) { //Check for shake
-                if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-                    float x = event.values[0], y = event.values[1], z = event.values[2];
-                    float accelSqrt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
+            public void onSensorChanged(SensorEvent event) {
+                //get delay of sensor
+                mInterval = event.sensor.getMinDelay();
 
-
-                }
+                //If switch is on update ball
+                if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+                    updateBall(event.values);
             }
 
             @Override
@@ -182,6 +187,7 @@ public class MainActivity extends Activity {
                 Canvas c = s.lockCanvas(null); //redraw the whole screen. define rect won't work
 
                 c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR); //always reset canvas
+                c.drawCircle(x, y, RADIUS, mPaint);
 
                 s.unlockCanvasAndPost(c);
             }
@@ -200,6 +206,9 @@ public class MainActivity extends Activity {
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                 Log.i(TAG, "onSurfaceTextureAvailable()");
+
+                //Set initial position of ball
+                x = width/2.0f; y = height/2.0f; w = width; h = height;
 
                 mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
                 try{ //Get information about the camera to create the CameraDevice
@@ -254,10 +263,13 @@ public class MainActivity extends Activity {
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
+            moveX = moveY = true;
+            a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0;
+            mGamma = 0.05f;
+
             mPaint = new Paint();
 
             mPaint.setAntiAlias(true);
-            mPaint.setStrokeWidth(WIDTH);
             mPaint.setColor(Color.BLUE);
             mPaint.setStyle(Paint.Style.FILL);
 
@@ -329,18 +341,18 @@ public class MainActivity extends Activity {
             mRawSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                 @Override
                 public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if(mFusedSwitch.isChecked())
-                        mFusedSwitch.setClickable(false);
+                    if(mGravity.isChecked())
+                        mGravity.setClickable(false);
                     else
-                        mFusedSwitch.setClickable(true);
+                        mGravity.setClickable(true);
                 }
             });
 
-            mFusedSwitch = (Switch) v.findViewById(R.id.fused_switch);
-            mFusedSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            mGravity = (Switch) v.findViewById(R.id.fused_switch);
+            mGravity.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                 @Override
                 public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if(mRawSwitch.isChecked())
+                    if (mRawSwitch.isChecked())
                         mRawSwitch.setClickable(false);
                     else
                         mRawSwitch.setClickable(true);
@@ -351,12 +363,12 @@ public class MainActivity extends Activity {
             mReset.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    mRawSwitch.setClickable(true); mFusedSwitch.setClickable(true);
-                    mRawSwitch.setChecked(false); mFusedSwitch.setChecked(false);
+                    reset();
                 }
             });
 
             mSeekBar = (SeekBar) v.findViewById(R.id.seekBar);
+            mSeekBar.setProgress(50);
             mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 @Override
                 public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -396,6 +408,50 @@ public class MainActivity extends Activity {
             mPreviewThread = new HandlerThread("background");
             mPreviewThread.start();
             mPreviewHandler = new Handler(mPreviewThread.getLooper());
+        }
+
+        private void reset() { //reset the ball
+            x = mTextureView.getWidth()/2; y = mTextureView.getHeight()/2;
+            moveX = moveY = true;
+            a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0; mGamma = 0.05f;
+            mRawSwitch.setClickable(true); mGravity.setClickable(true);
+            mRawSwitch.setChecked(false); mGravity.setChecked(false);
+        }
+
+        private void updateBall(float[] values) {
+            //Check if ball is at boundary
+            int w_min = (int) RADIUS, h_min = (int) RADIUS;
+            int w_max = (int) (w - RADIUS), h_max = (int) (h - RADIUS);
+            a_x = values[0]; a_y = values[1];
+
+            if(x <= w_min || x >= w_max) {
+                moveX = false;
+                x = x <= w_min ? w_min : w_max; //Place at left or right boundary
+                v_x = 0;
+            }
+            if(y <= h_min || y >= h_max) {
+                moveY = false;
+                y = y <= h_min ? h_min: h_max; //Place at top or bottom edge
+                v_y = 0;
+            }
+            //But if the ball is moving away from a boundary, let it
+            if((x == w_max && a_x < 0) || (x == w_min && a_x > 0))
+                moveX = true;
+
+            if((y == h_max && a_y < 0) || (y == h_min && a_y > 0))
+                moveY = true;
+
+            if(moveX) {
+                v_x1 = v_x; //set curr value to old
+                v_x = v_x1 + (a_x * mInterval) - (mGamma * v_x1);
+                x = x + (v_x * mInterval);
+            }
+
+            if(moveY) {
+                v_y1 = v_y; //set curr value to old
+                v_y = v_y1 + (a_y * mInterval) - (mGamma * v_y1);
+                y = y + (v_y * mInterval);
+            }
         }
     }
 }
