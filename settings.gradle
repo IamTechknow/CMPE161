@@ -1,1 +1,1 @@
-include ':asg1', ':asg2'
+include ':asg1', ':asg2', ':asg3'
