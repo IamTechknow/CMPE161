@@ -7,7 +7,6 @@ import android.graphics.SurfaceTexture;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.hardware.camera2.CameraAccessException;
@@ -86,6 +85,8 @@ public class MainActivity extends Activity {
      *
      *    If the texture view is destroyed, end the capture session <br />
      *
+     *    If the texture view is updated (30 times a second) redraw on shapes textureview
+     *
      * 3) In the CameraDevice callback:
      *      Put the texture surface into a list
      *      Setup a camera preview request and make it repeat
@@ -150,9 +151,7 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
-            }
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {}
         };
 
         private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
@@ -183,7 +182,6 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "Failed to create a capture session", e);
                     e.printStackTrace();
                 }
-
             }
 
             @Override
@@ -198,7 +196,6 @@ public class MainActivity extends Activity {
         };
 
         private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
-
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
                 //Try to draw the shapes here by obtaining a surface from the surface view and its canvas
@@ -273,23 +270,6 @@ public class MainActivity extends Activity {
             }
         };
 
-        private SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(SurfaceHolder holder) {
-
-            }
-
-            @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-
-            }
-
-            @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {
-                holder.getSurface().release();
-            }
-        };
-
         public PlaceholderFragment() {
         }
 
@@ -340,7 +320,6 @@ public class MainActivity extends Activity {
                 mCaptureSession.close();
                 mCaptureSession = null;
             }
-
             if (mCamera != null) {
                 mCamera.close();
                 mCamera = null;
@@ -359,8 +338,7 @@ public class MainActivity extends Activity {
         }
 
         @Override
-        public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                                 Bundle savedInstanceState) {
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View v = inflater.inflate(R.layout.fragment_main, container, false);
 
             //Obtain the texture view to implement callbacks for displaying raw pixel data
@@ -373,7 +351,6 @@ public class MainActivity extends Activity {
             mSurfaceView.setZOrderOnTop(true);
             mSurfaceHolder = mSurfaceView.getHolder();
             mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
-            mSurfaceHolder.addCallback(mSurfaceCallback);
             mSurfaceView.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
