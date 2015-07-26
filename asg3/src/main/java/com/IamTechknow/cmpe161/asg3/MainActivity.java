@@ -64,31 +64,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * The program flow of control is: <br />
-     * 1) Add the texture view to the top-level view and attach the callback <br />
-     * 2) In the callback, when the surface is created, do the following: <br />
-     *      Setup the CameraManager
-     *      Obtain the CameraCharacteristics for the back facing camera
-     *      Get supported sizes for the camera, and find the biggest size
-     *      Set the size for the surfaceHolder
-     *      open the CameraDevice, and set the CaptureSessionListener callback to start the capture session
-     *
-     *    If the texture view changed (due to rotation or on app resume), set the biggest size again
-     *
-     *    If the texture view is destroyed, end the capture session <br />
-     *
-     *    If the texture view is updated (30 times a second) redraw on shapes textureview
-     *
-     * 3) In the CameraDevice callback:
-     *      Put the texture surface into a list
-     *      Setup a camera preview request and make it repeat
-     *
-     * 4) In the CaptureSession state callback:
-     *      Create a request for a camera preview
-     *      Add the texture surface for the request
-     *      Build the request, and set it to be repeating
-     */
     public static class RollonFragment extends Fragment {
         //Camera fields
         public static final String TAG = "RollOn";
@@ -102,8 +77,7 @@ public class MainActivity extends Activity {
 
         //Sensor and graphics fields
         public final float RADIUS = 20.0f;
-        private float x, y, a_y, a_x, v_x, v_x1, v_y, v_y1, mGamma, w, h; //status of ball
-        private int mInterval;
+        private float x, y, a_y, a_x, v_x, v_x1, v_y, v_y1, mGamma, w, h, mInterval; //status of ball
         private boolean moveX, moveY;
         private SensorManager mSensorManager;
         private Paint mPaint;
@@ -126,8 +100,10 @@ public class MainActivity extends Activity {
         private SensorEventListener mShakeResponse = new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
-                //get delay of sensor
-                mInterval = event.sensor.getMinDelay();
+                //get delay of sensor in microseconds, convert to seconds
+                mInterval = event.sensor.getMinDelay() / 1000000.0F;
+                if(mInterval < 1/30f) //no faster than 30 FPS
+                    mInterval = 1/30f;
 
                 //If switch is on update ball
                 if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
@@ -368,11 +344,10 @@ public class MainActivity extends Activity {
             });
 
             mSeekBar = (SeekBar) v.findViewById(R.id.seekBar);
-            mSeekBar.setProgress(50);
             mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 @Override
                 public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-
+                    mGamma = 0.001F * progress; //Slider value changed, set gamma value accordingly
                 }
 
                 @Override
@@ -414,12 +389,13 @@ public class MainActivity extends Activity {
             x = mTextureView.getWidth()/2; y = mTextureView.getHeight()/2;
             moveX = moveY = true;
             a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0; mGamma = 0.05f;
+            mSeekBar.setProgress(20);
             mRawSwitch.setClickable(true); mGravity.setClickable(true);
             mRawSwitch.setChecked(false); mGravity.setChecked(false);
         }
 
         private void updateBall(float[] values) {
-            //Check if ball is at boundary
+            //Check if ball is at boundary. Set ball position limits
             int w_min = (int) RADIUS, h_min = (int) RADIUS;
             int w_max = (int) (w - RADIUS), h_max = (int) (h - RADIUS);
             a_x = values[0]; a_y = values[1];
