@@ -16,7 +16,7 @@
             android:id="@+id/shape_view" android:layout_alignParentStart="true" android:layout_marginStart="0dp"
             android:layout_alignParentTop="true" android:layout_marginTop="0dp"/>
     <Switch
-            android:id="@+id/raw_switch"
+            android:id="@+id/rod"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal|bottom"
@@ -25,7 +25,7 @@
     <Switch
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:id="@+id/fused_switch"
+            android:id="@+id/small"
             android:layout_alignParentBottom="true" android:layout_alignParentEnd="true"
             android:layout_marginEnd="80dp"/>
     <Button
@@ -42,13 +42,13 @@
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:text="@string/rod"
             android:id="@+id/raw_text" android:layout_alignTop="@+id/gravity_text"
-            android:layout_alignEnd="@+id/raw_switch"/>
+            android:layout_alignEnd="@+id/rod"/>
     <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:text="@string/small"
             android:id="@+id/gravity_text" android:layout_alignTop="@+id/reset"
-            android:layout_alignStart="@+id/fused_switch"/>
+            android:layout_alignStart="@+id/small"/>
 
 </RelativeLayout>

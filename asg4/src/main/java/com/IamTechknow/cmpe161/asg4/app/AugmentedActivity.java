@@ -6,6 +6,7 @@ import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
@@ -62,9 +63,12 @@ public class AugmentedActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        private float mInterval; //status of ball
+        public static final float DEVICE_HEIGHT = 1.5f, COL_DIST = 3.0f, COL_HEIGHT = 2.0f;
+        public static final int N_COLUMNS = 3;
         private SensorManager mSensorManager;
         private Paint mPaint;
+        private float[] mColumnEndPoints; //endpoints of lines representing columns
+        private long mTimeStamp;
 
         //UI fields
         private TextureView mTextureView;
@@ -79,14 +83,16 @@ public class AugmentedActivity extends Activity {
 
         //Callback fields
 
-        //Use the push method to regularly obtain accelerometer values to move the ball
+        //Use the push method to regularly obtain gyro values to set the view
         private SensorEventListener mGyroListener = new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
-                //get delay of sensor in microseconds, convert to seconds
-                mInterval = event.sensor.getMinDelay() / 1000000.0F;
-                if(mInterval < 1/30f) //no faster than 30 FPS
-                    mInterval = 1/30f;
+                mTimeStamp = event.timestamp; //nanoseconds start boot
+
+                if(mRodrigues.isChecked())
+                    fullRodrigues(event.values);
+                else if(mSmall.isChecked())
+                    smallAngleFormula(event.values);
 
             }
 
@@ -143,6 +149,7 @@ public class AugmentedActivity extends Activity {
                 Canvas c = s.lockCanvas(null); //redraw the whole screen. define rect won't work
 
                 c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR); //always reset canvas
+                //c.drawLines(mColumnEndPoints, 0, N_COLUMNS * 4, mPaint); //stop drawing after values used
 
                 s.unlockCanvasAndPost(c);
             }
@@ -216,6 +223,7 @@ public class AugmentedActivity extends Activity {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
 
+            mColumnEndPoints = new float[N_COLUMNS * 4];
             mPaint = new Paint();
             mPaint.setAntiAlias(true);
             mPaint.setColor(Color.BLACK);
@@ -286,8 +294,8 @@ public class AugmentedActivity extends Activity {
             mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
 
             //Configure the switches to disable the opposite switch if needed, and set sensor
-            mRodrigues = (Switch) v.findViewById(R.id.raw_switch);
-            mSmall = (Switch) v.findViewById(R.id.fused_switch);
+            mRodrigues = (Switch) v.findViewById(R.id.rod);
+            mSmall = (Switch) v.findViewById(R.id.small);
 
             //Set the switches to respond to touches, not to changed states. Set the sensor manager
             mRodrigues.setOnTouchListener(new View.OnTouchListener() {
@@ -348,6 +356,19 @@ public class AugmentedActivity extends Activity {
         private void reset() { //reset the app
             mRodrigues.setClickable(true); mSmall.setClickable(true);
             mRodrigues.setChecked(false); mSmall.setChecked(false);
+
+            for(float f : mColumnEndPoints)
+                f = 0f;
+        }
+
+        //Gyro integration based on small angle approximation (slow rotations)
+        private void smallAngleFormula(float[] values) {
+
+        }
+
+        //Gyro integration based on full Rodrigues formula
+        private void fullRodrigues(float[] values) {
+
         }
     }
 }
