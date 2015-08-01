@@ -25,17 +25,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
-import android.view.Surface;
-import android.view.SurfaceView;
-import android.view.SurfaceHolder;
-import android.view.TextureView;
+import android.view.*;
 import android.util.Size;
-import android.widget.CompoundButton;
 import android.widget.Switch;
 import android.widget.Button;
 import android.widget.SeekBar;
@@ -97,7 +88,7 @@ public class MainActivity extends Activity {
         //Callback fields
 
         //Use the push method to regularly obtain accelerometer values to move the ball
-        private SensorEventListener mShakeResponse = new SensorEventListener() {
+        private SensorEventListener mAccelListener = new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
                 //get delay of sensor in microseconds, convert to seconds
@@ -105,9 +96,7 @@ public class MainActivity extends Activity {
                 if(mInterval < 1/30f) //no faster than 30 FPS
                     mInterval = 1/30f;
 
-                //If switch is on update ball
-                if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-                    updateBall(event.values);
+                updateBall(event.values);
             }
 
             @Override
@@ -239,7 +228,7 @@ public class MainActivity extends Activity {
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setRetainInstance(true);
-            moveX = moveY = true;
+            moveX = moveY = false;
             a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0;
             mGamma = GAMMA_MULTIPLYER * 20;
 
@@ -251,7 +240,6 @@ public class MainActivity extends Activity {
 
             setupHandler();
             mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
-            mSensorManager.registerListener(mShakeResponse, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
         }
 
         @Override
@@ -259,8 +247,12 @@ public class MainActivity extends Activity {
             //Re-register background handler and listeners
             super.onResume();
             setupHandler();
-            mSensorManager.registerListener(mShakeResponse, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
             mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
+
+            if(mRawSwitch.isChecked()) //unlike touch listeners, we do want to check for checked status here
+                mSensorManager.registerListener(mAccelListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+            else if(mGravity.isChecked())
+                mSensorManager.registerListener(mAccelListener, mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY), SensorManager.SENSOR_DELAY_NORMAL);
 
             if(mCameraId != null) //Resume camera session
                 try {
@@ -293,7 +285,7 @@ public class MainActivity extends Activity {
             }
 
             //Free accelerometer
-            mSensorManager.unregisterListener(mShakeResponse);
+            mSensorManager.unregisterListener(mAccelListener);
             super.onPause();
         }
 
@@ -312,26 +304,49 @@ public class MainActivity extends Activity {
             mSurfaceHolder = mSurfaceView.getHolder();
             mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
 
-            //Configure the switch to set whether to draw lines or circles
+            //Configure the switches to disable the opposite switch if needed, and set sensor
             mRawSwitch = (Switch) v.findViewById(R.id.raw_switch);
-            mRawSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            mGravity = (Switch) v.findViewById(R.id.fused_switch);
+
+            //Set the switches to respond to touches, not to changed states. Set the sensor manager
+            mRawSwitch.setOnTouchListener(new View.OnTouchListener() {
                 @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if(mGravity.isChecked())
-                        mGravity.setClickable(false);
-                    else
-                        mGravity.setClickable(true);
+                public boolean onTouch(View v, MotionEvent event) {
+                    if(event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                        if(mGravity.isChecked()) {
+                            mSensorManager.unregisterListener(mAccelListener);
+                            mGravity.setChecked(false);
+                        }
+
+                        //This is happening before the checked state is toggled, so check for unchecked
+                        if(!mRawSwitch.isChecked()) //Set listener
+                            mSensorManager.registerListener(mAccelListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+                        else {
+                            mSensorManager.unregisterListener(mAccelListener);
+                            moveX = moveY = false;
+                        }
+                    }
+                    return false; //allow the next listener to change visual state of toggle
                 }
             });
-
-            mGravity = (Switch) v.findViewById(R.id.fused_switch);
-            mGravity.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            //FIXME: Gravity sensor does not behave as expected
+            mGravity.setOnTouchListener(new View.OnTouchListener() {
                 @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if (mRawSwitch.isChecked())
-                        mRawSwitch.setClickable(false);
-                    else
-                        mRawSwitch.setClickable(true);
+                public boolean onTouch(View v, MotionEvent event) {
+                    if(event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                        if(mRawSwitch.isChecked()) {
+                            mRawSwitch.setChecked(false);
+                            mSensorManager.unregisterListener(mAccelListener);
+                        }
+
+                        if(!mGravity.isChecked())
+                            mSensorManager.registerListener(mAccelListener, mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY), SensorManager.SENSOR_DELAY_NORMAL);
+                        else {
+                            mSensorManager.unregisterListener(mAccelListener);
+                            moveX = moveY = false;
+                        }
+                    }
+                    return false;
                 }
             });
 
@@ -387,7 +402,7 @@ public class MainActivity extends Activity {
 
         private void reset() { //reset the ball
             x = mTextureView.getWidth()/2; y = mTextureView.getHeight()/2;
-            moveX = moveY = true;
+            moveX = moveY = false;
             a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0; mGamma = GAMMA_MULTIPLYER * 20;
             mSeekBar.setProgress(20);
             mRawSwitch.setClickable(true); mGravity.setClickable(true);
@@ -407,12 +422,17 @@ public class MainActivity extends Activity {
                 moveX = false;
                 x = x <= w_min ? w_min : w_max; //Place at left or right boundary
                 v_x = 0;
-            }
+            } else
+                moveX = true;
+
             if(y <= h_min || y >= h_max) {
                 moveY = false;
                 y = y <= h_min ? h_min: h_max; //Place at top or bottom edge
                 v_y = 0;
-            }
+            } else
+                moveY = true;
+
+
             //But if the ball is moving away from a boundary, let it
             if((x == w_max && a_x < 0) || (x == w_min && a_x > 0))
                 moveX = true;
