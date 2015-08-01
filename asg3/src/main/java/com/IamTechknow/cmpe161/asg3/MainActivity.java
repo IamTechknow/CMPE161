@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public final float RADIUS = 20.0f;
+        public final float RADIUS = 20.0f, ACCEL_FACTOR = 3.0f, GAMMA_MULTIPLYER = 0.0001f;
         private float x, y, a_y, a_x, v_x, v_x1, v_y, v_y1, mGamma, w, h, mInterval; //status of ball
         private boolean moveX, moveY;
         private SensorManager mSensorManager;
@@ -241,7 +241,7 @@ public class MainActivity extends Activity {
             setRetainInstance(true);
             moveX = moveY = true;
             a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0;
-            mGamma = 0.05f;
+            mGamma = GAMMA_MULTIPLYER * 20;
 
             mPaint = new Paint();
 
@@ -347,7 +347,7 @@ public class MainActivity extends Activity {
             mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 @Override
                 public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    mGamma = 0.001F * progress; //Slider value changed, set gamma value accordingly
+                    mGamma = GAMMA_MULTIPLYER * progress; //Slider value changed, set gamma value accordingly
                 }
 
                 @Override
@@ -388,7 +388,7 @@ public class MainActivity extends Activity {
         private void reset() { //reset the ball
             x = mTextureView.getWidth()/2; y = mTextureView.getHeight()/2;
             moveX = moveY = true;
-            a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0; mGamma = 0.05f;
+            a_x = a_y = v_x = v_x1 = v_y = v_y1 = 0; mGamma = GAMMA_MULTIPLYER * 20;
             mSeekBar.setProgress(20);
             mRawSwitch.setClickable(true); mGravity.setClickable(true);
             mRawSwitch.setChecked(false); mGravity.setChecked(false);
@@ -398,7 +398,10 @@ public class MainActivity extends Activity {
             //Check if ball is at boundary. Set ball position limits
             int w_min = (int) RADIUS, h_min = (int) RADIUS;
             int w_max = (int) (w - RADIUS), h_max = (int) (h - RADIUS);
-            a_x = values[0]; a_y = values[1];
+            a_x = -ACCEL_FACTOR * values[0]; a_y = ACCEL_FACTOR * values[1]; //CCW rotation = positive X values
+
+            //Don't update ball if the view is not yet setup
+            if(w_max < 0 || h_max < 0) return;
 
             if(x <= w_min || x >= w_max) {
                 moveX = false;
