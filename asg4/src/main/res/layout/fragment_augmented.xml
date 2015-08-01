@@ -1,0 +1,54 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                xmlns:tools="http://schemas.android.com/tools"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                tools:context=".AugmentedActivity$PlaceholderFragment">
+    <TextureView
+            android:id="@+id/camera_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true" android:layout_marginStart="0dp"
+            android:layout_alignParentTop="true" android:layout_marginTop="0dp"/>
+    <SurfaceView
+            android:background="@android:color/transparent"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/shape_view" android:layout_alignParentStart="true" android:layout_marginStart="0dp"
+            android:layout_alignParentTop="true" android:layout_marginTop="0dp"/>
+    <Switch
+            android:id="@+id/raw_switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_alignParentBottom="true" android:layout_alignParentStart="true"
+            android:layout_marginStart="80dp"/>
+    <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/fused_switch"
+            android:layout_alignParentBottom="true" android:layout_alignParentEnd="true"
+            android:layout_marginEnd="80dp"/>
+    <Button
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/reset"
+            android:id="@+id/reset"
+            android:layout_toEndOf="@id/reset"
+            android:layout_alignParentBottom="true" android:layout_centerHorizontal="true"/>
+    <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="@string/rod"
+            android:id="@+id/raw_text" android:layout_alignTop="@+id/gravity_text"
+            android:layout_alignEnd="@+id/raw_switch"/>
+    <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="@string/small"
+            android:id="@+id/gravity_text" android:layout_alignTop="@+id/reset"
+            android:layout_alignStart="@+id/fused_switch"/>
+
+</RelativeLayout>

@@ -1,6 +1,6 @@
 # CMPE161 Android ports
 
-Porting and implementating CMPE161 assignments to Android OS
+Porting and implementing CMPE161 assignments to Android OS
 
 ## About
 
