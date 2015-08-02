@@ -3,13 +3,7 @@ package com.IamTechknow.cmpe161.asg4.app;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
-import android.graphics.SurfaceTexture;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.PixelFormat;
-import android.graphics.PorterDuff;
+import android.graphics.*;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
@@ -51,6 +45,19 @@ public class AugmentedActivity extends Activity {
         }
     }
 
+    /**
+     * The app works as follows:
+     * 1) When the app starts, the initial rotation matrix needs to be obtained. There are two ways:
+     * a) from the accelerometer and magnetometer
+     *    based on the current rotation of the device. This may be done by SensorManager.getRotationMatrix()
+     * b) Start the current orientation with the identity matrix, which represents the initial orientation.
+     *    Mutiply the initial matrix with the delta matrix from gyro measurements in the integration method.
+     *
+     * 2) When the gyro sensor changes, calculate the new rotation matrix and orientation
+     *
+     * 3) Update the translation of the vectors representing the columns and rotate them
+     */
+
     public static class PlaceholderFragment extends Fragment {
         //Camera fields
         public static final String TAG = "AugmentedApp";
@@ -63,12 +70,14 @@ public class AugmentedActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public static final float DEVICE_HEIGHT = 1.5f, COL_DIST = 3.0f, COL_HEIGHT = 2.0f;
+        public static final float DEVICE_HEIGHT = 1.5f, COL_DIST = 3.0f, COL_HEIGHT = 2.0f, NS2S = 1.0f / 1000000000.0f, EPSILON = 0.01f;
         public static final int N_COLUMNS = 3;
         private SensorManager mSensorManager;
         private Paint mPaint;
-        private float[] mColumnEndPoints; //endpoints of lines representing columns
+        private float[] mColumnEndPoints, mRotationVector, mOrientation, mInitAccel, mInitMag;
+        private float[] mDeltaRotationMatrix, mCurRotationMatrix = {1, 0, 0, 0, 1, 0, 0, 0, 1}; //endpoints of lines representing columns, rotation vector is quaternion
         private long mTimeStamp;
+        private boolean mHasInitialOrientation;
 
         //UI fields
         private TextureView mTextureView;
@@ -83,16 +92,76 @@ public class AugmentedActivity extends Activity {
 
         //Callback fields
 
-        //Use the push method to regularly obtain gyro values to set the view
+        //Set this listener for accelerometer and magentometer to get orientation
+        private SensorEventListener mInitialOrientationListener = new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+                    mInitAccel = event.values;
+
+                if(event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+                    mInitMag = event.values;
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+        };
+
+        //Use the push method to regularly obtain gyro values to update user orientation
         private SensorEventListener mGyroListener = new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
+                //Compute the timestep's delta rotation after sampling it from gyro data
+                if(mTimeStamp != 0 && mHasInitialOrientation) {
+                    final float dT = (event.timestamp - mTimeStamp) * NS2S;
+                    // Axis of the rotation sample, not normalized yet.
+                    float axisX = event.values[0], axisY = event.values[1], axisZ = event.values[2];
+
+                    // Calculate the angular speed of the sample
+                    float omegaMagnitude = (float) Math.sqrt(axisX*axisX + axisY*axisY + axisZ*axisZ);
+
+                    // Normalize the rotation vector if it's big enough to get the axis
+                    // (that is, EPSILON should represent your maximum allowable margin of error)
+                    if (omegaMagnitude > EPSILON) {
+                        axisX /= omegaMagnitude;
+                        axisY /= omegaMagnitude;
+                        axisZ /= omegaMagnitude;
+                    }
+
+                    // Integrate around this axis with the angular speed by the timestep
+                    // in order to get a delta rotation from this sample over the timestep
+                    // We will convert this axis-angle representation of the delta rotation
+                    // into a quaternion before turning it into the rotation matrix.
+                    float thetaOverTwo = omegaMagnitude * dT / 2.0f;
+                    float sinThetaOverTwo = (float) Math.sin(thetaOverTwo), cosThetaOverTwo = (float) Math.cos(thetaOverTwo);
+                    mRotationVector[0] = sinThetaOverTwo * axisX;
+                    mRotationVector[1] = sinThetaOverTwo * axisY;
+                    mRotationVector[2] = sinThetaOverTwo * axisZ;
+                    mRotationVector[3] = cosThetaOverTwo;
+                } else { //get initial orientation
+                    //disable other sensors
+                    mSensorManager.unregisterListener(mInitialOrientationListener);
+                    calculateInitialOrientation();
+                }
+
                 mTimeStamp = event.timestamp; //nanoseconds start boot
 
+                //convert rotation matrix from rotation vector
+                SensorManager.getRotationMatrixFromVector(mDeltaRotationMatrix, mRotationVector);
+
+                //concatenate the delta rotation we computed with the current rotation
+                // in order to get the updated rotation.
+                mCurRotationMatrix = mulMatrices(mCurRotationMatrix, mDeltaRotationMatrix);
+
+                //Now get updated rotation orientation vector
+                SensorManager.getOrientation(mCurRotationMatrix, mOrientation);
+
+                //TODO: Update the translations of the two vectors representing a column, and then rotate the vector
+
                 if(mRodrigues.isChecked())
-                    fullRodrigues(event.values);
+                    fullRodrigues();
                 else if(mSmall.isChecked())
-                    smallAngleFormula(event.values);
+                    smallAngleFormula();
 
             }
 
@@ -224,6 +293,9 @@ public class AugmentedActivity extends Activity {
             setRetainInstance(true);
 
             mColumnEndPoints = new float[N_COLUMNS * 4];
+            mRotationVector = new float[4];
+            mDeltaRotationMatrix = new float[9];
+            mOrientation = new float[3];
             mPaint = new Paint();
             mPaint.setAntiAlias(true);
             mPaint.setColor(Color.BLACK);
@@ -232,7 +304,8 @@ public class AugmentedActivity extends Activity {
             setupHandler();
             mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
             mSensorManager.registerListener(mGyroListener, mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), SensorManager.SENSOR_DELAY_NORMAL);
-
+            mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_NORMAL);
+            mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
         }
 
         @Override
@@ -357,18 +430,39 @@ public class AugmentedActivity extends Activity {
             mRodrigues.setClickable(true); mSmall.setClickable(true);
             mRodrigues.setChecked(false); mSmall.setChecked(false);
 
-            for(float f : mColumnEndPoints)
-                f = 0f;
+            mColumnEndPoints = new float[N_COLUMNS * 4];
+            mRotationVector = new float[4];
+            mDeltaRotationMatrix = new float[9];
+            mOrientation = new float[3];
         }
 
         //Gyro integration based on small angle approximation (slow rotations)
-        private void smallAngleFormula(float[] values) {
+        private void smallAngleFormula() {
 
         }
 
         //Gyro integration based on full Rodrigues formula
-        private void fullRodrigues(float[] values) {
+        private void fullRodrigues() {
 
+        }
+
+        private void calculateInitialOrientation() {
+            mHasInitialOrientation = SensorManager.getRotationMatrix(mCurRotationMatrix, null, mInitAccel, mInitMag);
+        }
+
+        private float[] mulMatrices(float[] a, float[] b) {
+            float[] result = new float[9];
+            result[0] = a[0] * b[0] + a[1] * b[3] + a[2] * b[6];
+            result[1] = a[0] * b[1] + a[1] * b[4] + a[2] * b[7];
+            result[2] = a[0] * b[2] + a[1] * b[5] + a[2] * b[8];
+            result[3] = a[3] * b[0] + a[4] * b[3] + a[5] * b[6];
+            result[4] = a[3] * b[1] + a[4] * b[4] + a[5] * b[7];
+            result[5] = a[3] * b[2] + a[4] * b[5] + a[5] * b[8];
+            result[6] = a[6] * b[0] + a[7] * b[3] + a[8] * b[6];
+            result[7] = a[6] * b[1] + a[7] * b[4] + a[8] * b[7];
+            result[8] = a[6] * b[2] + a[7] * b[5] + a[8] * b[8];
+
+            return result;
         }
     }
 }
