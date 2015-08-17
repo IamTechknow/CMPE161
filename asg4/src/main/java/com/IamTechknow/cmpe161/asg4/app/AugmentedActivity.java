@@ -51,7 +51,7 @@ public class AugmentedActivity extends Activity {
      * a) from the accelerometer and magnetometer
      *    based on the current rotation of the device. This may be done by SensorManager.getRotationMatrix()
      * b) Start the current orientation with the identity matrix, which represents the initial orientation.
-     *    Mutiply the initial matrix with the delta matrix from gyro measurements in the integration method.
+     *    Multiply the initial matrix with the delta matrix from gyro measurements in the integration method.
      *
      * 2) When the gyro sensor changes, calculate the new rotation matrix and orientation
      *
@@ -92,15 +92,17 @@ public class AugmentedActivity extends Activity {
 
         //Callback fields
 
-        //Set this listener for accelerometer and magentometer to get orientation
+        //Set this listener for accelerometer and magnetometer to get initial orientation
         private SensorEventListener mInitialOrientationListener = new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
                 if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-                    mInitAccel = event.values;
+                    System.arraycopy(event.values, 0, mInitAccel, 0, mInitAccel.length);
 
                 if(event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
-                    mInitMag = event.values;
+					System.arraycopy(event.values, 0, mInitMag, 0, mInitMag.length);
+
+				calculateInitialOrientation();
             }
 
             @Override
@@ -138,10 +140,6 @@ public class AugmentedActivity extends Activity {
                     mRotationVector[1] = sinThetaOverTwo * axisY;
                     mRotationVector[2] = sinThetaOverTwo * axisZ;
                     mRotationVector[3] = cosThetaOverTwo;
-                } else { //get initial orientation
-                    //disable other sensors
-                    mSensorManager.unregisterListener(mInitialOrientationListener);
-                    calculateInitialOrientation();
                 }
 
                 mTimeStamp = event.timestamp; //nanoseconds start boot
@@ -296,6 +294,8 @@ public class AugmentedActivity extends Activity {
             mRotationVector = new float[4];
             mDeltaRotationMatrix = new float[9];
             mOrientation = new float[3];
+			mInitAccel = new float[3];
+			mInitMag = new float[3];
             mPaint = new Paint();
             mPaint.setAntiAlias(true);
             mPaint.setColor(Color.BLACK);
@@ -315,6 +315,10 @@ public class AugmentedActivity extends Activity {
             setupHandler();
             mCameraManager = (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
             mSensorManager.registerListener(mGyroListener, mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), SensorManager.SENSOR_DELAY_NORMAL);
+            if(!mHasInitialOrientation) {
+                mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_NORMAL);
+                mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+            }
 
             if(mCameraId != null) //Resume camera session
                 try {
@@ -346,8 +350,10 @@ public class AugmentedActivity extends Activity {
                 Log.e(TAG, "Background worker thread was interrupted while joined", ex);
             }
 
-            //Free gyro
+            //Free gyro. App needs to update initial orientation
             mSensorManager.unregisterListener(mGyroListener);
+            mSensorManager.unregisterListener(mInitialOrientationListener);
+			mHasInitialOrientation = false;
             super.onPause();
         }
 
@@ -383,24 +389,24 @@ public class AugmentedActivity extends Activity {
                 }
             });
             mSmall.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                        if (mRodrigues.isChecked()) {
-                            mRodrigues.setChecked(false);
-                        }
-                    }
-                    return false;
-                }
-            });
+				@Override
+				public boolean onTouch(View v, MotionEvent event) {
+					if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+						if (mRodrigues.isChecked()) {
+							mRodrigues.setChecked(false);
+						}
+					}
+					return false;
+				}
+			});
 
             mReset = (Button) v.findViewById(R.id.reset);
             mReset.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    reset();
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					reset();
+				}
+			});
 
             return v;
         }
@@ -446,8 +452,17 @@ public class AugmentedActivity extends Activity {
 
         }
 
+        //Calculate initial rotation using accelerator and magentic field data
         private void calculateInitialOrientation() {
-            mHasInitialOrientation = SensorManager.getRotationMatrix(mCurRotationMatrix, null, mInitAccel, mInitMag);
+            if(SensorManager.getRotationMatrix(mCurRotationMatrix, null, mInitAccel, mInitMag)) {
+				SensorManager.getOrientation(mCurRotationMatrix, mOrientation);
+				mHasInitialOrientation = true;
+
+				//TODO: enough or need to compute axis-angle?
+				Log.d(TAG, "Obtained initial orientation");
+				//disable both sensors
+				mSensorManager.unregisterListener(mInitialOrientationListener);
+			}
         }
 
         private float[] mulMatrices(float[] a, float[] b) {
