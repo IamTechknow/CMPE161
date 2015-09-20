@@ -45,16 +45,16 @@ public class AugmentedActivity extends Activity {
     }
 
     /**
-     * The app works as follows:
-     * 1) When the app starts, the initial rotation matrix needs to be obtained. There are two ways:
+     * <p>The app works as follows: </p>
+     * <p>1) When the app starts, the initial rotation matrix needs to be obtained. There are two ways:
      * a) from the accelerometer and magnetometer
      *    based on the current rotation of the device. This may be done by SensorManager.getRotationMatrix()
      * b) Start the current orientation with the identity matrix, which represents the initial orientation.
-     *    Multiply the initial matrix with the delta matrix from gyro measurements in the integration method.
+     *    Multiply the initial matrix with the delta matrix from gyro measurements in the integration method. </p>
      *
-     * 2) When the gyro sensor changes, calculate the new rotation matrix and orientation
+     * <p>2) When the gyro sensor changes, calculate the new rotation matrix and orientation </p>
      *
-     * 3) Update the translation of the vectors representing the columns and rotate them
+     * <p>3) Update the translation of the vectors representing the columns and rotate them </p>
      */
 
     public static class PlaceholderFragment extends Fragment {
@@ -69,11 +69,11 @@ public class AugmentedActivity extends Activity {
         private CaptureRequest.Builder mPreviewBuilder;
 
         //Sensor and graphics fields
-        public static final float DEVICE_HEIGHT = 1.5f, COL_DIST = 3.0f, COL_HEIGHT = 2.0f, NS2S = 1.0f / 1000000000.0f, EPSILON = 0.01f;
-        public static final int N_COLUMNS = 1;
+        public static final float NS2S = 1.0f / 1000000000.0f, EPSILON = 0.00000001f, FOV = (90.0f * (float) Math.PI) / 180.0f;
+        public static final int N_COLUMNS = 3;
         private SensorManager mSensorManager;
-        private Paint mPaint;
-        private float[] mColumnEndPoints, mRotationVector, mOrientation, mInitAccel, mInitMag;
+        private Paint mTextPaint, mPaint;
+        private float[] mColumnEndPoints, mRotationVector, mOrientation, mPrevOrientation, mOrientDelta, mInitAccel, mInitMag;
         private float[] mDeltaRotationMatrix, mCurRotationMatrix = {1, 0, 0, 0, 1, 0, 0, 0, 1}; //endpoints of lines representing columns, rotation vector is quaternion
         private long mTimeStamp;
         private boolean mHasInitialOrientation;
@@ -150,7 +150,12 @@ public class AugmentedActivity extends Activity {
                 mCurRotationMatrix = mulMatrices(mCurRotationMatrix, mDeltaRotationMatrix);
 
                 //Now get updated rotation orientation vector
+				System.arraycopy(mOrientation, 0, mPrevOrientation, 0, mOrientation.length);
                 SensorManager.getOrientation(mCurRotationMatrix, mOrientation);
+
+				//Let's get the difference between the two Orientations
+				//TODO: Account for overflow
+				mOrientDelta = new float[] {mOrientation[0] - mPrevOrientation[0], mOrientation[1] - mPrevOrientation[1], mOrientation[2] - mPrevOrientation[2]};
 
 				updateColumns();
             }
@@ -208,8 +213,8 @@ public class AugmentedActivity extends Activity {
                 Canvas c = s.lockCanvas(null); //redraw the whole screen. define rect won't work
 
                 c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR); //always reset canvas
-               // c.drawLines(mColumnEndPoints, 0, N_COLUMNS * 4, mPaint); //stop drawing after values used
-				c.drawText("Z: " + Float.toString(mOrientation[0]) + " Y: " + Float.toString(mOrientation[1]) + " X: " + Float.toString(mOrientation[2]), 500.0f, 500.0f, mPaint); //debugging only, check orientation
+                c.drawLines(mColumnEndPoints, 0, N_COLUMNS * 4, mPaint); //stop drawing after values used
+				c.drawText("Z: " + Float.toString(mOrientation[0]) + " Y: " + Float.toString(mOrientation[1]) + " X: " + Float.toString(mOrientation[2]), 640.0f, 500.0f, mTextPaint); //debugging only, check orientation
 
                 s.unlockCanvasAndPost(c);
             }
@@ -284,24 +289,23 @@ public class AugmentedActivity extends Activity {
             setRetainInstance(true);
 
             mColumnEndPoints = new float[N_COLUMNS * 4];
-            mRotationVector = new float[4];
-            mDeltaRotationMatrix = new float[9];
-            mOrientation = new float[3];
-			mInitAccel = new float[3];
-			mInitMag = new float[3];
+            mRotationVector = new float[4]; mDeltaRotationMatrix = new float[9];
+            mOrientation = new float[3]; mOrientDelta = new float[3]; mPrevOrientation = new float[3]; mInitAccel = new float[3]; mInitMag = new float[3];
             mPaint = new Paint();
-            mPaint.setAntiAlias(true);
-            mPaint.setColor(Color.BLUE);
-			mPaint.setTextSize(50.0f);
-			mPaint.setTypeface(Typeface.defaultFromStyle(Typeface.BOLD));
-			mPaint.setTextAlign(Paint.Align.CENTER);
-			mPaint.setLinearText(true);
-            //mPaint.setStyle(Paint.Style.STROKE);
-			mPaint.setStrokeWidth(50.0f);
-			mColumnEndPoints[0] = 500;
-			mColumnEndPoints[1] = 500;
-			mColumnEndPoints[2] = 500;
-			mColumnEndPoints[3] = 1000;
+			mPaint.setAntiAlias(true);
+			mPaint.setColor(Color.BLUE);
+            mPaint.setStyle(Paint.Style.STROKE);
+			mPaint.setStrokeWidth(20.0f);
+
+            mTextPaint = new Paint();
+            mTextPaint.setAntiAlias(true);
+            mTextPaint.setColor(Color.BLUE);
+            mTextPaint.setTextSize(50.0f);
+            mTextPaint.setTypeface(Typeface.defaultFromStyle(Typeface.BOLD));
+            mTextPaint.setTextAlign(Paint.Align.CENTER);
+            mTextPaint.setLinearText(true);
+
+			setColVals();
 
             setupHandler();
             mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
@@ -407,17 +411,34 @@ public class AugmentedActivity extends Activity {
         }
 
         private void reset() { //reset the app
-			mColumnEndPoints[0] = 500;
-			mColumnEndPoints[1] = 500;
-			mColumnEndPoints[2] = 500;
-			mColumnEndPoints[3] = 1000;
+			setColVals();
             mRotationVector = new float[4];
             mDeltaRotationMatrix = new float[9];
             mOrientation = new float[3];
         }
 
-		private void updateColumns() {
+		private void setColVals() { //TODO: Init all columns
+			mColumnEndPoints = new float[] {300.0f, 300.0f, 300.0f, 1000.0f, 600.0f, 300.0f, 600.0f, 1000.0f, 900.0f, 300.0f, 900.0f, 1000.0f};
+		}
 
+		/*
+			TODO:Primary method to update the fields representing the columns
+		*/
+		private void updateColumns() {
+			float deltaX, deltaY; //Translate columns by this much
+
+			//With a FOV of 90 degrees, calculate the percentage of difference of rotation
+			//for each axis divided by FOV, then multiply that with half the amount of the screen width/height
+			deltaX = mOrientDelta[2] > 0 ? (mOrientDelta[0] / FOV) * (mPreviewSize.getWidth() /4) : -(mOrientDelta[2] / FOV) * (mPreviewSize.getWidth() /4);
+			deltaY = mOrientDelta[1] > 0 ? (mOrientDelta[2] / FOV) * (mPreviewSize.getHeight() /4) : -(mOrientDelta[1] / FOV) * (mPreviewSize.getHeight() /4);
+
+			//Update X coordinates for columns which have even indices
+			for(int i = 0; i < mColumnEndPoints.length; i += 2)
+				mColumnEndPoints[i] += deltaX;
+
+			//Update Y coordinates for columns which have odd indices
+			for(int i = 1; i < mColumnEndPoints.length; i += 2)
+				mColumnEndPoints[i] += deltaY;
 		}
 
         //Calculate initial rotation using accelerator and magentic field data
