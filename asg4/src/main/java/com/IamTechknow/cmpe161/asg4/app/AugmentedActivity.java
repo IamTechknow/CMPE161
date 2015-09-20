@@ -415,6 +415,11 @@ public class AugmentedActivity extends Activity {
             mRotationVector = new float[4];
             mDeltaRotationMatrix = new float[9];
             mOrientation = new float[3];
+            mCurRotationMatrix = new float[] {1, 0, 0, 0, 1, 0, 0, 0, 1};
+
+            mHasInitialOrientation = false;
+            mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_NORMAL);
+            mSensorManager.registerListener(mInitialOrientationListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
         }
 
 		private void setColVals() { //TODO: Init all columns
