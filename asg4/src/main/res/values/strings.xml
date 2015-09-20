@@ -1,6 +1,4 @@
 <resources>
     <string name="app_name">Augmented Colonnades</string>
     <string name="reset">Reset</string>
-    <string name="rod">Rodrigues</string>
-    <string name="small">Small Angles</string>
 </resources>

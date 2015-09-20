@@ -22,7 +22,6 @@ import android.os.HandlerThread;
 import android.util.Log;
 import android.view.*;
 import android.util.Size;
-import android.widget.Switch;
 import android.widget.Button;
 
 import java.util.Collections;
@@ -71,7 +70,7 @@ public class AugmentedActivity extends Activity {
 
         //Sensor and graphics fields
         public static final float DEVICE_HEIGHT = 1.5f, COL_DIST = 3.0f, COL_HEIGHT = 2.0f, NS2S = 1.0f / 1000000000.0f, EPSILON = 0.01f;
-        public static final int N_COLUMNS = 3;
+        public static final int N_COLUMNS = 1;
         private SensorManager mSensorManager;
         private Paint mPaint;
         private float[] mColumnEndPoints, mRotationVector, mOrientation, mInitAccel, mInitMag;
@@ -83,7 +82,6 @@ public class AugmentedActivity extends Activity {
         private TextureView mTextureView;
         private SurfaceView mSurfaceView;
         private SurfaceHolder mSurfaceHolder;
-        private Switch mRodrigues, mSmall;
         private Button mReset;
 
         //Thread fields
@@ -154,13 +152,7 @@ public class AugmentedActivity extends Activity {
                 //Now get updated rotation orientation vector
                 SensorManager.getOrientation(mCurRotationMatrix, mOrientation);
 
-                //TODO: Update the translations of the two vectors representing a column, and then rotate the vector
-
-                if(mRodrigues.isChecked())
-                    fullRodrigues();
-                else if(mSmall.isChecked())
-                    smallAngleFormula();
-
+				updateColumns();
             }
 
             @Override
@@ -216,7 +208,8 @@ public class AugmentedActivity extends Activity {
                 Canvas c = s.lockCanvas(null); //redraw the whole screen. define rect won't work
 
                 c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR); //always reset canvas
-                //c.drawLines(mColumnEndPoints, 0, N_COLUMNS * 4, mPaint); //stop drawing after values used
+               // c.drawLines(mColumnEndPoints, 0, N_COLUMNS * 4, mPaint); //stop drawing after values used
+				c.drawText("Z: " + Float.toString(mOrientation[0]) + " Y: " + Float.toString(mOrientation[1]) + " X: " + Float.toString(mOrientation[2]), 500.0f, 500.0f, mPaint); //debugging only, check orientation
 
                 s.unlockCanvasAndPost(c);
             }
@@ -298,8 +291,17 @@ public class AugmentedActivity extends Activity {
 			mInitMag = new float[3];
             mPaint = new Paint();
             mPaint.setAntiAlias(true);
-            mPaint.setColor(Color.BLACK);
-            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setColor(Color.BLUE);
+			mPaint.setTextSize(50.0f);
+			mPaint.setTypeface(Typeface.defaultFromStyle(Typeface.BOLD));
+			mPaint.setTextAlign(Paint.Align.CENTER);
+			mPaint.setLinearText(true);
+            //mPaint.setStyle(Paint.Style.STROKE);
+			mPaint.setStrokeWidth(50.0f);
+			mColumnEndPoints[0] = 500;
+			mColumnEndPoints[1] = 500;
+			mColumnEndPoints[2] = 500;
+			mColumnEndPoints[3] = 1000;
 
             setupHandler();
             mSensorManager = (SensorManager) getActivity().getSystemService(SENSOR_SERVICE);
@@ -372,34 +374,6 @@ public class AugmentedActivity extends Activity {
             mSurfaceHolder = mSurfaceView.getHolder();
             mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
 
-            //Configure the switches to disable the opposite switch if needed, and set sensor
-            mRodrigues = (Switch) v.findViewById(R.id.rod);
-            mSmall = (Switch) v.findViewById(R.id.small);
-
-            //Set the switches to respond to touches, not to changed states. Set the sensor manager
-            mRodrigues.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                        if (mSmall.isChecked()) {
-                            mSmall.setChecked(false);
-                        }
-                    }
-                    return false; //allow the next listener to change visual state of toggle
-                }
-            });
-            mSmall.setOnTouchListener(new View.OnTouchListener() {
-				@Override
-				public boolean onTouch(View v, MotionEvent event) {
-					if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-						if (mRodrigues.isChecked()) {
-							mRodrigues.setChecked(false);
-						}
-					}
-					return false;
-				}
-			});
-
             mReset = (Button) v.findViewById(R.id.reset);
             mReset.setOnClickListener(new View.OnClickListener() {
 				@Override
@@ -433,24 +407,18 @@ public class AugmentedActivity extends Activity {
         }
 
         private void reset() { //reset the app
-            mRodrigues.setClickable(true); mSmall.setClickable(true);
-            mRodrigues.setChecked(false); mSmall.setChecked(false);
-
-            mColumnEndPoints = new float[N_COLUMNS * 4];
+			mColumnEndPoints[0] = 500;
+			mColumnEndPoints[1] = 500;
+			mColumnEndPoints[2] = 500;
+			mColumnEndPoints[3] = 1000;
             mRotationVector = new float[4];
             mDeltaRotationMatrix = new float[9];
             mOrientation = new float[3];
         }
 
-        //Gyro integration based on small angle approximation (slow rotations)
-        private void smallAngleFormula() {
+		private void updateColumns() {
 
-        }
-
-        //Gyro integration based on full Rodrigues formula
-        private void fullRodrigues() {
-
-        }
+		}
 
         //Calculate initial rotation using accelerator and magentic field data
         private void calculateInitialOrientation() {
@@ -458,7 +426,6 @@ public class AugmentedActivity extends Activity {
 				SensorManager.getOrientation(mCurRotationMatrix, mOrientation);
 				mHasInitialOrientation = true;
 
-				//TODO: enough or need to compute axis-angle?
 				Log.d(TAG, "Obtained initial orientation");
 				//disable both sensors
 				mSensorManager.unregisterListener(mInitialOrientationListener);
